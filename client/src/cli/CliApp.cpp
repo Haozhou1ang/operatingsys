@@ -18,6 +18,9 @@ static const char* kColorOk = "\033[32m";
 static const char* kColorError = "\033[31m";
 static const char* kColorTitle = "\033[36m";
 static const char* kColorPrompt = "\033[35m";
+static const char* kColorLabel = "\033[33m";
+static const char* kColorMuted = "\033[2m";
+static const char* kStyleBold = "\033[1m";
 static const char* kColorReset = "\033[0m";
 
 // 统一执行一次请求：组包由外面做，网络在这里做，响应解析在这里做
@@ -176,8 +179,8 @@ static void PrintBusinessHelp(const SessionStore& session) {
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
   const int kUsageWidth = 28;
-  std::cout << "\n" << kColorTitle << "Business commands" << kColorReset << "\n";
-  std::cout << "----------------------------------------\n";
+  std::cout << "\n" << kColorTitle << kStyleBold << "Business commands" << kColorReset << "\n";
+  std::cout << kColorMuted << "----------------------------------------" << kColorReset << "\n";
 
   auto group_label = [](const CommandSpec& spec) -> std::string {
     if (!spec.requires_auth) return "PUBLIC";
@@ -208,7 +211,7 @@ static void PrintBusinessHelp(const SessionStore& session) {
     std::string next_group = group_label(spec);
     if (next_group != current_group) {
       current_group = next_group;
-      std::cout << "\n" << kColorTitle << current_group << kColorReset << "\n";
+      std::cout << "\n" << kColorLabel << kStyleBold << current_group << kColorReset << "\n";
     }
 
     std::string desc = spec.desc;
@@ -227,9 +230,9 @@ static void PrintBusinessHelp(const SessionStore& session) {
 
 static void PrintHelp(const SessionStore& session) {
   const int kUsageWidth = 24;
-  std::cout << kColorTitle << "Client CLI" << kColorReset << "\n";
-  std::cout << "----------------------------------------\n";
-  std::cout << "Commands:\n";
+  std::cout << kColorTitle << kStyleBold << "Client CLI" << kColorReset << "\n";
+  std::cout << kColorMuted << "----------------------------------------" << kColorReset << "\n";
+  std::cout << kColorLabel << "Commands" << kColorReset << ":\n";
   auto print_row = [kUsageWidth](const std::string& usage, const std::string& desc) {
     std::cout << "  " << std::left << std::setw(kUsageWidth) << usage << desc << "\n";
   };
@@ -257,7 +260,7 @@ void CliApp::Run() {
   PrintHelp(session);
 
   while (true) {
-    std::cout << kColorPrompt << "paper> " << kColorReset << std::flush;
+    std::cout << kColorPrompt << kStyleBold << "paper> " << kColorReset << std::flush;
     if (!std::getline(std::cin, line)) break;
 
     std::istringstream iss(line);
