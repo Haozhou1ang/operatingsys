@@ -21,6 +21,7 @@ static const char* kColorPrompt = "\033[35m";
 static const char* kColorLabel = "\033[33m";
 static const char* kColorMuted = "\033[2m";
 static const char* kStyleBold = "\033[1m";
+static const char* kStyleUnderline = "\033[4m";
 static const char* kColorReset = "\033[0m";
 
 // 统一执行一次请求：组包由外面做，网络在这里做，响应解析在这里做
@@ -49,11 +50,11 @@ static std::optional<ProtoResponse> DoRequest(const std::string& host,
 
 static void PrintParsedResponse(const ProtoResponse& parsed) {
   if (parsed.ok) {
-    std::cout << kColorOk << "[OK]" << kColorReset << "\n";
+    std::cout << kStyleBold << kColorOk << "✔ [OK]" << kColorReset << "\n";
     if (!parsed.body.empty()) std::cout << parsed.body;
     if (!parsed.body.empty() && parsed.body.back() != '\n') std::cout << "\n";
   } else {
-    std::cout << kColorError << "[ERROR]" << kColorReset << " " << parsed.err_code
+    std::cout << kStyleBold << kColorError << "✖ [ERROR]" << kColorReset << " " << parsed.err_code
               << " " << parsed.err_msg << "\n";
     if (!parsed.body.empty()) std::cout << parsed.body;
     if (!parsed.body.empty() && parsed.body.back() != '\n') std::cout << "\n";
@@ -78,7 +79,8 @@ static std::string trim_ws(std::string s) {
 }
 
 static std::string read_body_multiline() {
-  std::cout << "Enter body. Finish input with a single 'END' line.\n";
+  std::cout << kColorMuted << "Paste body below. End input with a single line: "
+            << kStyleBold << "END" << kColorReset << kColorMuted << "." << kColorReset << "\n";
   std::string body, line;
   while (true) {
     std::getline(std::cin, line);
@@ -178,9 +180,10 @@ static void PrintBusinessHelp(const SessionStore& session) {
   std::sort(items.begin(), items.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
-  const int kUsageWidth = 28;
-  std::cout << "\n" << kColorTitle << kStyleBold << "Business commands" << kColorReset << "\n";
-  std::cout << kColorMuted << "----------------------------------------" << kColorReset << "\n";
+  const int kUsageWidth = 30;
+  std::cout << "\n" << kColorTitle << kStyleBold << "Business commands"
+            << kColorReset << " " << kColorMuted << "(role-aware)" << kColorReset << "\n";
+  std::cout << kColorMuted << "────────────────────────────────────────" << kColorReset << "\n";
 
   auto group_label = [](const CommandSpec& spec) -> std::string {
     if (!spec.requires_auth) return "PUBLIC";
@@ -211,16 +214,20 @@ static void PrintBusinessHelp(const SessionStore& session) {
     std::string next_group = group_label(spec);
     if (next_group != current_group) {
       current_group = next_group;
-      std::cout << "\n" << kColorLabel << kStyleBold << current_group << kColorReset << "\n";
+      std::cout << "\n" << kColorLabel << kStyleBold << current_group << kColorReset
+                << " " << kColorMuted << "┆" << kColorReset << "\n";
     }
 
     std::string desc = spec.desc;
     if (spec.needs_body) {
       if (!desc.empty()) desc += " ";
+      desc += kColorMuted;
       desc += "[body]";
+      desc += kColorReset;
     }
 
-    std::cout << "  " << std::left << std::setw(kUsageWidth) << spec.usage;
+    std::cout << "  " << kColorPrompt << "›" << kColorReset << " "
+              << std::left << std::setw(kUsageWidth) << spec.usage;
     if (!desc.empty()) std::cout << desc;
     std::cout << "\n";
   }
@@ -229,12 +236,14 @@ static void PrintBusinessHelp(const SessionStore& session) {
 
 
 static void PrintHelp(const SessionStore& session) {
-  const int kUsageWidth = 24;
-  std::cout << kColorTitle << kStyleBold << "Client CLI" << kColorReset << "\n";
-  std::cout << kColorMuted << "----------------------------------------" << kColorReset << "\n";
-  std::cout << kColorLabel << "Commands" << kColorReset << ":\n";
+  const int kUsageWidth = 26;
+  std::cout << kStyleBold << kColorTitle << "Paper System CLI" << kColorReset
+            << " " << kColorMuted << "— interactive terminal" << kColorReset << "\n";
+  std::cout << kColorMuted << "────────────────────────────────────────" << kColorReset << "\n";
+  std::cout << kColorLabel << kStyleUnderline << "Commands" << kColorReset << "\n";
   auto print_row = [kUsageWidth](const std::string& usage, const std::string& desc) {
-    std::cout << "  " << std::left << std::setw(kUsageWidth) << usage << desc << "\n";
+    std::cout << "  " << kColorPrompt << "›" << kColorReset << " "
+              << std::left << std::setw(kUsageWidth) << usage << desc << "\n";
   };
   print_row("help", "show help");
   print_row("connect <ip> <port>", "set server address");
@@ -242,7 +251,7 @@ static void PrintHelp(const SessionStore& session) {
   print_row("whoami", "show current session");
   print_row("logout", "logout");
   print_row("exit", "exit client");
-  print_row("send <commandLine>", "debug: send command");
+  print_row("send <commandLine>", "debug: send raw command");
   print_row("sendb <commandLine>", "debug: send with multi-line body");
   PrintBusinessHelp(session);
 }
@@ -260,7 +269,8 @@ void CliApp::Run() {
   PrintHelp(session);
 
   while (true) {
-    std::cout << kColorPrompt << kStyleBold << "paper> " << kColorReset << std::flush;
+    std::cout << kColorPrompt << kStyleBold << "paper" << kColorReset
+              << kColorMuted << "▸ " << kColorReset << std::flush;
     if (!std::getline(std::cin, line)) break;
 
     std::istringstream iss(line);
