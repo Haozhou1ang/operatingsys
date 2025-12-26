@@ -177,9 +177,6 @@ static void PrintBusinessHelp(const SessionStore& session) {
   items.reserve(Registry().size());
   for (const auto& kv : Registry()) items.push_back(kv);
 
-  std::sort(items.begin(), items.end(),
-            [](const auto& a, const auto& b) { return a.first < b.first; });
-
   const int kUsageWidth = 30;
   std::cout << "\n" << kColorTitle << kStyleBold << "Business commands"
             << kColorReset << " " << kColorMuted << "(role-aware)" << kColorReset << "\n";
@@ -196,7 +193,8 @@ static void PrintBusinessHelp(const SessionStore& session) {
     return label;
   };
 
-  std::string current_group;
+  std::unordered_map<std::string, std::vector<std::pair<std::string, CommandSpec>>> grouped;
+  grouped.reserve(items.size());
   for (const auto& it : items) {
     const auto& spec = it.second;
 
@@ -210,26 +208,53 @@ static void PrintBusinessHelp(const SessionStore& session) {
     }
 
     if (!show) continue;
+    grouped[group_label(spec)].push_back(it);
+  }
 
-    std::string next_group = group_label(spec);
-    if (next_group != current_group) {
-      current_group = next_group;
-      std::cout << "\n" << kColorLabel << kStyleBold << current_group << kColorReset
-                << " " << kColorMuted << "┆" << kColorReset << "\n";
+  const std::vector<std::string> group_order = {
+      "PUBLIC",
+      "ALL AUTHENTICATED",
+      "AUTHOR",
+      "REVIEWER",
+      "EDITOR",
+      "ADMIN",
+      "AUTHOR/REVIEWER/EDITOR/ADMIN",
+  };
+
+  auto print_group = [&](const std::string& label,
+                         std::vector<std::pair<std::string, CommandSpec>>& entries) {
+    if (entries.empty()) return;
+    std::sort(entries.begin(), entries.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::cout << "\n" << kColorLabel << kStyleBold << label << kColorReset << "\n";
+    for (const auto& it : entries) {
+      const auto& spec = it.second;
+
+      std::string desc = spec.desc;
+      if (spec.needs_body) {
+        if (!desc.empty()) desc += " ";
+        desc += kColorMuted;
+        desc += "[body]";
+        desc += kColorReset;
+      }
+
+      std::cout << "  " << kColorPrompt << "›" << kColorReset << " "
+                << std::left << std::setw(kUsageWidth) << spec.usage;
+      if (!desc.empty()) std::cout << desc;
+      std::cout << "\n";
     }
+  };
 
-    std::string desc = spec.desc;
-    if (spec.needs_body) {
-      if (!desc.empty()) desc += " ";
-      desc += kColorMuted;
-      desc += "[body]";
-      desc += kColorReset;
+  for (const auto& label : group_order) {
+    auto it = grouped.find(label);
+    if (it != grouped.end()) {
+      print_group(label, it->second);
+      grouped.erase(it);
     }
+  }
 
-    std::cout << "  " << kColorPrompt << "›" << kColorReset << " "
-              << std::left << std::setw(kUsageWidth) << spec.usage;
-    if (!desc.empty()) std::cout << desc;
-    std::cout << "\n";
+  for (auto& kv : grouped) {
+    print_group(kv.first, kv.second);
   }
   std::cout << "\n";
 }
