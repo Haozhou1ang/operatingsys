@@ -1,0 +1,11 @@
+D:/osbhw2/filesystem/build/CMakeFiles/reviewfs.dir
+D:/osbhw2/filesystem/build/CMakeFiles/mkfs_tool.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_diskimage.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_allocator.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_directory.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_cache.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_cache_integration.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_snapshot.dir
+D:/osbhw2/filesystem/build/CMakeFiles/test_fs.dir
+D:/osbhw2/filesystem/build/CMakeFiles/edit_cache.dir
+D:/osbhw2/filesystem/build/CMakeFiles/rebuild_cache.dir

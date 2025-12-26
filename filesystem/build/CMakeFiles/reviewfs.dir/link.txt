@@ -1,0 +1,2 @@
+C:\ProgramData\mingw64\mingw64\bin\ar.exe qc libreviewfs.a CMakeFiles/reviewfs.dir/src/DiskImage.cpp.obj CMakeFiles/reviewfs.dir/src/Allocator.cpp.obj CMakeFiles/reviewfs.dir/src/Directory.cpp.obj CMakeFiles/reviewfs.dir/src/Cache.cpp.obj CMakeFiles/reviewfs.dir/src/Snapshot.cpp.obj CMakeFiles/reviewfs.dir/src/FS.cpp.obj
+C:\ProgramData\mingw64\mingw64\bin\ranlib.exe libreviewfs.a
