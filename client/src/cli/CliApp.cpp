@@ -12,7 +12,13 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <iomanip>
 
+static const char* kColorOk = "\033[32m";
+static const char* kColorError = "\033[31m";
+static const char* kColorTitle = "\033[36m";
+static const char* kColorPrompt = "\033[35m";
+static const char* kColorReset = "\033[0m";
 
 // 统一执行一次请求：组包由外面做，网络在这里做，响应解析在这里做
 static std::optional<ProtoResponse> DoRequest(const std::string& host,
@@ -40,11 +46,12 @@ static std::optional<ProtoResponse> DoRequest(const std::string& host,
 
 static void PrintParsedResponse(const ProtoResponse& parsed) {
   if (parsed.ok) {
-    std::cout << "OK\n";
+    std::cout << kColorOk << "[OK]" << kColorReset << "\n";
     if (!parsed.body.empty()) std::cout << parsed.body;
     if (!parsed.body.empty() && parsed.body.back() != '\n') std::cout << "\n";
   } else {
-    std::cout << "ERROR " << parsed.err_code << " " << parsed.err_msg << "\n";
+    std::cout << kColorError << "[ERROR]" << kColorReset << " " << parsed.err_code
+              << " " << parsed.err_msg << "\n";
     if (!parsed.body.empty()) std::cout << parsed.body;
     if (!parsed.body.empty() && parsed.body.back() != '\n') std::cout << "\n";
   }
@@ -68,7 +75,7 @@ static std::string trim_ws(std::string s) {
 }
 
 static std::string read_body_multiline() {
-  std::cout << "Enter body, end with a single 'END' line\n";
+  std::cout << "Enter body. Finish input with a single 'END' line.\n";
   std::string body, line;
   while (true) {
     std::getline(std::cin, line);
@@ -168,7 +175,22 @@ static void PrintBusinessHelp(const SessionStore& session) {
   std::sort(items.begin(), items.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
-  std::cout << "\nBusiness commands:\n";
+  const int kUsageWidth = 28;
+  std::cout << "\n" << kColorTitle << "Business commands" << kColorReset << "\n";
+  std::cout << "----------------------------------------\n";
+
+  auto group_label = [](const CommandSpec& spec) -> std::string {
+    if (!spec.requires_auth) return "PUBLIC";
+    if (spec.roles.empty()) return "ALL AUTHENTICATED";
+    std::string label;
+    for (size_t i = 0; i < spec.roles.size(); ++i) {
+      if (i > 0) label += "/";
+      label += spec.roles[i];
+    }
+    return label;
+  };
+
+  std::string current_group;
   for (const auto& it : items) {
     const auto& spec = it.second;
 
@@ -183,9 +205,20 @@ static void PrintBusinessHelp(const SessionStore& session) {
 
     if (!show) continue;
 
-    std::cout << "  " << spec.usage;
-    if (!spec.desc.empty()) std::cout << "    - " << spec.desc;
-    if (spec.needs_body) std::cout << "  [body]";
+    std::string next_group = group_label(spec);
+    if (next_group != current_group) {
+      current_group = next_group;
+      std::cout << "\n" << kColorTitle << current_group << kColorReset << "\n";
+    }
+
+    std::string desc = spec.desc;
+    if (spec.needs_body) {
+      if (!desc.empty()) desc += " ";
+      desc += "[body]";
+    }
+
+    std::cout << "  " << std::left << std::setw(kUsageWidth) << spec.usage;
+    if (!desc.empty()) std::cout << desc;
     std::cout << "\n";
   }
   std::cout << "\n";
@@ -193,17 +226,21 @@ static void PrintBusinessHelp(const SessionStore& session) {
 
 
 static void PrintHelp(const SessionStore& session) {
-  std::cout
-      << "Client CLI started.\n"
-      << "Commands:\n"
-      << "  help\n"
-      << "  connect <ip> <port>\n"
-      << "  login <user> <pass>\n"
-      << "  whoami\n"
-      << "  logout\n"
-      << "  exit\n"
-      << "  send  <commandLine>   (debug)\n"
-      << "  sendb <commandLine>   (debug, multi-line body)\n";
+  const int kUsageWidth = 24;
+  std::cout << kColorTitle << "Client CLI" << kColorReset << "\n";
+  std::cout << "----------------------------------------\n";
+  std::cout << "Commands:\n";
+  auto print_row = [kUsageWidth](const std::string& usage, const std::string& desc) {
+    std::cout << "  " << std::left << std::setw(kUsageWidth) << usage << desc << "\n";
+  };
+  print_row("help", "show help");
+  print_row("connect <ip> <port>", "set server address");
+  print_row("login <user> <pass>", "login");
+  print_row("whoami", "show current session");
+  print_row("logout", "logout");
+  print_row("exit", "exit client");
+  print_row("send <commandLine>", "debug: send command");
+  print_row("sendb <commandLine>", "debug: send with multi-line body");
   PrintBusinessHelp(session);
 }
 
@@ -220,7 +257,7 @@ void CliApp::Run() {
   PrintHelp(session);
 
   while (true) {
-    std::cout << "> " << std::flush;
+    std::cout << kColorPrompt << "paper> " << kColorReset << std::flush;
     if (!std::getline(std::cin, line)) break;
 
     std::istringstream iss(line);
