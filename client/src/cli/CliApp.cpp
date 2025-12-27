@@ -19,6 +19,7 @@ static const char* kColorError = "\033[31m";
 static const char* kColorTitle = "\033[36m";
 static const char* kColorPrompt = "\033[35m";
 static const char* kColorLabel = "\033[33m";
+static const char* kColorWarn = "\033[93m";
 static const char* kColorMuted = "\033[2m";
 static const char* kStyleBold = "\033[1m";
 static const char* kStyleUnderline = "\033[4m";
@@ -294,7 +295,7 @@ void CliApp::Run() {
   PrintHelp(session);
 
   while (true) {
-    std::cout << kColorPrompt << kStyleBold << "paper" << kColorReset
+    std::cout << kColorPrompt << kStyleBold << "client" << kColorReset
               << kColorMuted << "▸ " << kColorReset << std::flush;
     if (!std::getline(std::cin, line)) break;
 
@@ -324,12 +325,12 @@ void CliApp::Run() {
 
     if (op == "whoami"){
         if (!session.IsLoggedIn()){
-            std::cout << "Not logged in.\n";
+            std::cout << kColorWarn << "Not logged in." << kColorReset << "\n";
         }else{
             const std::string& tok = session.Token();
             std::string tok8 = tok.substr(0, std::min<size_t>(8, tok.size()));
-            std::cout << "Logged in. role=" << session.Role()
-                      << " token=" << tok8;
+            std::cout << "Logged in. role=" << kColorLabel << kStyleBold
+                      << session.Role() << kColorReset << " token=" << tok8;
             if (tok.size() > tok8.size()) std::cout << "...";
             std::cout << "\n";  
         }
@@ -338,7 +339,7 @@ void CliApp::Run() {
 
     if (op == "logout") {
         if (!session.IsLoggedIn()) {
-            std::cout << "Not logged in.\n";
+            std::cout << kColorWarn << "Not logged in." << kColorReset << "\n";
             continue;
         }
 
@@ -373,8 +374,8 @@ void CliApp::Run() {
 
     if (op == "login") {
         if (session.IsLoggedIn()) {
-            std::cout << "Already logged in as role=" << session.Role()
-                      << ". Please logout first.\n";
+            std::cout << "Already logged in as role=" << kColorLabel << kStyleBold
+                      << session.Role() << kColorReset << ". Please logout first.\n";
             continue;
         }
 
@@ -412,7 +413,8 @@ void CliApp::Run() {
         }
 
         session.Set(token, role);
-        std::cout << "OK\nLogged in. role=" << role << "\n";
+            std::cout << "OK\nLogged in. role=" << kColorLabel << kStyleBold << role
+                      << kColorReset << "\n";
         continue;
     }
 
@@ -454,7 +456,8 @@ void CliApp::Run() {
 
     auto it = Registry().find(verb);
     if (it == Registry().end()) {
-      std::cout << "Unknown command: " << verb << " (type 'help')\n";
+      std::cout << kColorWarn << "Unknown command: " << verb << " (type 'help')"
+                << kColorReset << "\n";
       continue;
     }
 
@@ -462,18 +465,19 @@ void CliApp::Run() {
 
     // auth check
     if (spec.requires_auth && !session.IsLoggedIn()) {
-      std::cout << "Not logged in.\n";
+      std::cout << kColorWarn << "Not logged in." << kColorReset << "\n";
       continue;
     }
 
     // role check
     if (!spec.roles.empty()) {
       if (!session.IsLoggedIn()) {
-        std::cout << "Not logged in.\n";
+        std::cout << kColorWarn << "Not logged in." << kColorReset << "\n";
         continue;
       }
       if (std::find(spec.roles.begin(), spec.roles.end(), session.Role()) == spec.roles.end()) {
-        std::cout << "Permission denied for role " << session.Role() << "\n";
+        std::cout << kColorError << "Permission denied for role " << session.Role()
+                  << kColorReset << "\n";
         continue;
       }
     }
@@ -504,6 +508,6 @@ void CliApp::Run() {
 
 
 
-    std::cout << "Unknown command. Type 'help'.\n";
+    std::cout << kColorWarn << "Unknown command. Type 'help'." << kColorReset << "\n";
   }
 }
