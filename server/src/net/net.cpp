@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/select.h>
 
 #include <cerrno>
 #include <cstring>
@@ -14,6 +16,7 @@
 #include <thread>
 
 static constexpr size_t kMaxFrameBytes = 4 * 1024 * 1024; // 4 MiB
+static constexpr int kIoTimeoutMs = 3000;
 
 static bool read_exact(int fd, char* buf, size_t n, std::string& err) {
   size_t off = 0;
@@ -63,8 +66,28 @@ static std::optional<std::string> read_line(int fd, size_t max_len, std::string&
   return s;
 }
 
+static bool set_socket_timeouts(int fd, int timeout_ms, std::string& err) {
+  if (timeout_ms <= 0) return true;
+  timeval tv{};
+  tv.tv_sec = timeout_ms / 1000;
+  tv.tv_usec = (timeout_ms % 1000) * 1000;
+  if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    err = std::string("setsockopt(SO_RCVTIMEO): ") + std::strerror(errno);
+    return false;
+  }
+  if (::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+    err = std::string("setsockopt(SO_SNDTIMEO): ") + std::strerror(errno);
+    return false;
+  }
+  return true;
+}
+
 static void handle_conn(int conn, ProtocolRouter* router) {
   std::string err;
+  if (!set_socket_timeouts(conn, kIoTimeoutMs, err)) {
+    ::close(conn);
+    return;
+  }
 
   auto header_opt = read_line(conn, 64, err);
   if (!header_opt || header_opt->rfind("LEN ", 0) != 0) {
@@ -77,7 +100,20 @@ static void handle_conn(int conn, ProtocolRouter* router) {
   }
 
   size_t n = 0;
-  try { n = (size_t)std::stoul(header_opt->substr(4)); }
+  std::string len_str = header_opt->substr(4);
+  if (!len_str.empty() && len_str.back() == '\n') {
+    len_str.pop_back();
+  }
+  if (len_str.empty() ||
+      len_str.find_first_not_of("0123456789") != std::string::npos) {
+    std::string resp = Response::Err(400, "bad_len_value").Serialize();
+    std::string h = "LEN " + std::to_string(resp.size()) + "\n";
+    (void)write_all(conn, h.data(), h.size(), err);
+    (void)write_all(conn, resp.data(), resp.size(), err);
+    ::close(conn);
+    return;
+  }
+  try { n = (size_t)std::stoul(len_str); }
   catch (...) {
     std::string resp = Response::Err(400, "bad_len_value").Serialize();
     std::string h = "LEN " + std::to_string(resp.size()) + "\n";
