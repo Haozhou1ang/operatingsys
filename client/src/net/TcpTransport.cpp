@@ -3,8 +3,10 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <cerrno>
 #include <cstring>
@@ -62,7 +64,83 @@ static std::optional<std::string> read_line(int fd, size_t max_len, std::string&
   return s;
 }
 
-bool TcpTransport::Connect(const std::string& host, int port, int /*timeout_ms*/) {
+static bool set_socket_timeouts(int fd, int timeout_ms, std::string& err) {
+  if (timeout_ms <= 0) return true;
+
+  timeval tv{};
+  tv.tv_sec = timeout_ms / 1000;
+  tv.tv_usec = (timeout_ms % 1000) * 1000;
+  if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    err = std::string("setsockopt(SO_RCVTIMEO): ") + std::strerror(errno);
+    return false;
+  }
+  if (::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+    err = std::string("setsockopt(SO_SNDTIMEO): ") + std::strerror(errno);
+    return false;
+  }
+  return true;
+}
+
+static bool connect_with_timeout(int fd, const sockaddr* addr, socklen_t addrlen,
+                                 int timeout_ms, std::string& err) {
+  if (timeout_ms <= 0) {
+    if (::connect(fd, addr, addrlen) == 0) return true;
+    err = std::string("connect failed: ") + std::strerror(errno);
+    return false;
+  }
+
+  int flags = ::fcntl(fd, F_GETFL, 0);
+  if (flags < 0) {
+    err = std::string("fcntl(F_GETFL): ") + std::strerror(errno);
+    return false;
+  }
+  if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    err = std::string("fcntl(F_SETFL): ") + std::strerror(errno);
+    return false;
+  }
+
+  int rc = ::connect(fd, addr, addrlen);
+  if (rc == 0) {
+    (void)::fcntl(fd, F_SETFL, flags);
+    return true;
+  }
+  if (errno != EINPROGRESS) {
+    err = std::string("connect failed: ") + std::strerror(errno);
+    (void)::fcntl(fd, F_SETFL, flags);
+    return false;
+  }
+
+  fd_set wfds;
+  FD_ZERO(&wfds);
+  FD_SET(fd, &wfds);
+  timeval tv{};
+  tv.tv_sec = timeout_ms / 1000;
+  tv.tv_usec = (timeout_ms % 1000) * 1000;
+  rc = ::select(fd + 1, nullptr, &wfds, nullptr, &tv);
+  if (rc <= 0) {
+    err = (rc == 0) ? "connect timeout" : std::string("select: ") + std::strerror(errno);
+    (void)::fcntl(fd, F_SETFL, flags);
+    return false;
+  }
+
+  int so_error = 0;
+  socklen_t so_len = sizeof(so_error);
+  if (::getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &so_len) < 0) {
+    err = std::string("getsockopt(SO_ERROR): ") + std::strerror(errno);
+    (void)::fcntl(fd, F_SETFL, flags);
+    return false;
+  }
+  if (so_error != 0) {
+    err = std::string("connect failed: ") + std::strerror(so_error);
+    (void)::fcntl(fd, F_SETFL, flags);
+    return false;
+  }
+
+  (void)::fcntl(fd, F_SETFL, flags);
+  return true;
+}
+
+bool TcpTransport::Connect(const std::string& host, int port, int timeout_ms) {
   Close();
   last_error_.clear();
 
@@ -82,7 +160,9 @@ bool TcpTransport::Connect(const std::string& host, int port, int /*timeout_ms*/
   for (addrinfo* p = res; p; p = p->ai_next) {
     fd = ::socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (fd < 0) continue;
-    if (::connect(fd, p->ai_addr, p->ai_addrlen) == 0) break;
+    std::string err;
+    if (connect_with_timeout(fd, p->ai_addr, p->ai_addrlen, timeout_ms, err)) break;
+    last_error_ = err;
     ::close(fd);
     fd = -1;
   }
@@ -93,6 +173,10 @@ bool TcpTransport::Connect(const std::string& host, int port, int /*timeout_ms*/
     return false;
   }
 
+  if (!set_socket_timeouts(fd, timeout_ms, last_error_)) {
+    ::close(fd);
+    return false;
+  }
   sockfd_ = fd;
   return true;
 }
@@ -118,7 +202,7 @@ std::optional<std::string> TcpTransport::RecvFrame() {
 
   auto header_opt = read_line(sockfd_, 64, last_error_);
   if (!header_opt) return std::nullopt;
-  const std::string& header = *header_opt;
+  std::string header = *header_opt;
 
   if (header.rfind("LEN ", 0) != 0) {
     last_error_ = "RecvFrame: bad header (missing LEN)";
@@ -126,8 +210,17 @@ std::optional<std::string> TcpTransport::RecvFrame() {
   }
 
   size_t n = 0;
+  std::string len_str = header.substr(4);
+  if (!len_str.empty() && len_str.back() == '\n') {
+    len_str.pop_back();
+  }
+  if (len_str.empty() ||
+      len_str.find_first_not_of("0123456789") != std::string::npos) {
+    last_error_ = "RecvFrame: bad length";
+    return std::nullopt;
+  }
   try {
-    n = (size_t)std::stoul(header.substr(4));
+    n = (size_t)std::stoul(len_str);
   } catch (...) {
     last_error_ = "RecvFrame: bad length";
     return std::nullopt;
