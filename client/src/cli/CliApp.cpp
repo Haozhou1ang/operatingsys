@@ -413,8 +413,9 @@ void CliApp::Run() {
         }
 
         session.Set(token, role);
-            std::cout << "OK\nLogged in. role=" << kColorLabel << kStyleBold << role
-                      << kColorReset << "\n";
+        std::cout << kStyleBold << kColorOk << "✔ [OK]" << kColorReset << "\n"
+                  << "Logged in. role=" << kColorLabel << kStyleBold << role
+                  << kColorReset << "\n";
         continue;
     }
 
